@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>無機化学スワイプ色あて</title>
+    <style>
+      :root {
+        --bg-color: #f5f5f7;
+        --card-bg: #ffffff;
+        --text-color: #333333;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        overflow: hidden;
+        user-select: none;
+        touch-action: none; /* スクロールやピンチイン・アウトを禁止 */
+        transition: background-color 0.2s ease;
+      }
+      #game-container {
+        width: 100%;
+        max-width: 400px;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        position: relative;
+        box-sizing: border-box;
+        padding: 20px;
+      }
+      #header {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        font-size: 1.1rem;
+        font-weight: bold;
+        z-index: 10;
+      }
+      /* 左右の選択肢枠（ガイド用リンク） */
+      .choice-zone {
+        position: absolute;
+        top: 20vh;
+        width: 120px;
+        height: 50vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        border-radius: 20px;
+        border: 3px dashed #ccc;
+        background-color: rgba(255, 255, 255, 0.5);
+        z-index: 1;
+      }
+      #zone-left {
+        left: 15px;
+      }
+      #zone-right {
+        right: 15px;
+      }
+
+      /* 中央下部のドラッグ用カードエリア */
+      #card-container {
+        position: absolute;
+        bottom: 8vh;
+        width: calc(100% - 40px);
+        max-width: 360px;
+        height: 35vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 5;
+      }
+
+      /* 前後カード共通のスタイル */
+      .card-element {
+        background-color: var(--card-bg);
+        width: 100%;
+        height: 100%;
+        border-radius: 24px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        box-sizing: border-box;
+        user-select: none;
+        position: absolute;
+        transform-origin: center bottom;
+      }
+
+      /* 前面カード（操作用） */
+      #card {
+        z-index: 6;
+        cursor: grab;
+      }
+      #card:active {
+        cursor: grabbing;
+      }
+
+      /* 背面カード（山札・次の問題用） */
+      #bg-card {
+        z-index: 4;
+        transform: scale(0.94) translateY(15px);
+        opacity: 0.6;
+      }
+
+      .substance-name {
+        font-size: 2.2rem;
+        font-weight: 800;
+        margin-bottom: 10px;
+        pointer-events: none;
+      }
+      .substance-formula {
+        font-size: 1.3rem;
+        color: #666;
+        pointer-events: none;
+      }
+
+      /* 共通画面スタイル */
+      .hidden {
+        display: none !important;
+      }
+
+      /* ★【新規追加】スタート選択画面スタイル */
+      #start-screen,
+      #result-screen {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        z-index: 20;
+        background-color: var(--bg-color);
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        padding: 40px 20px;
+      }
+
+      #result-screen {
+        touch-action: auto; /* 結果画面はスクロールできるように許可 */
+        overflow-y: auto;
+      }
+
+      /* モード選択ボタンのグループ */
+      .btn-group {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        width: 100%;
+        max-width: 280px;
+      }
+
+      .menu-btn {
+        background-color: #007aff;
+        color: white;
+        border: none;
+        padding: 18px 30px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        border-radius: 30px;
+        cursor: pointer;
+        box-shadow: 0 5px 15px rgba(0, 122, 255, 0.3);
+        transition: transform 0.1s ease;
+      }
+      .menu-btn:active {
+        transform: scale(0.97);
+      }
+      .menu-btn.secondary {
+        background-color: #34c759;
+        box-shadow: 0 5px 15px rgba(52, 199, 89, 0.3);
+      }
+
+      /* 間違えた問題リストのコンテナ */
+      #wrong-list-container {
+        width: 100%;
+        max-width: 340px;
+        background: white;
+        border-radius: 16px;
+        padding: 15px;
+        box-sizing: border-box;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        max-height: 40vh;
+        overflow-y: auto;
+        text-align: left;
+      }
+      .wrong-title {
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: #e53935;
+        margin-top: 0;
+        margin-bottom: 10px;
+        border-bottom: 2px solid #ffcdd2;
+        padding-bottom: 5px;
+      }
+      .wrong-item {
+        font-size: 0.95rem;
+        padding: 8px 0;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .wrong-item:last-child {
+        border-bottom: none;
+      }
+      .wrong-info {
+        display: flex;
+        flex-direction: column;
+      }
+      .wrong-formula {
+        font-size: 0.8rem;
+        color: #777;
+      }
+      .wrong-color {
+        font-weight: bold;
+        color: #007aff;
+      }
+
+      /* 演出用フラッシュ */
+      .flash-correct {
+        background-color: #d4edda !important;
+      }
+      .flash-wrong {
+        background-color: #f8d7da !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container">
+      <!-- プレイ画面 -->
+      <div id="header">
+        <div id="progress">問数: 1/10</div>
+        <div id="score-view">スコア: 0</div>
+      </div>
+
+      <!-- 左右の選択肢ターゲット -->
+      <div id="zone-left" class="choice-zone">左選択肢</div>
+      <div id="zone-right" class="choice-zone">右選択肢</div>
+
+      <!-- ドラッグ用カードエリア -->
+      <div id="card-container">
+        <!-- 背面カード -->
+        <div id="bg-card" class="card-element">
+          <div id="bg-substance-name" class="substance-name"></div>
+          <div id="bg-substance-formula" class="substance-formula"></div>
+        </div>
+        <!-- 前面カード -->
+        <div id="card" class="card-element">
+          <div id="substance-name" class="substance-name">塩化銀</div>
+          <div id="substance-formula" class="substance-formula">AgCl</div>
+        </div>
+      </div>
+
+      <!-- ★【新規追加】スタート画面（モード選択） -->
+      <div id="start-screen">
+        <h1 style="font-size: 2.2rem; margin: 0 0 10px 0; text-align: center">
+          🧪 スワイプ色あて
+        </h1>
+        <p style="color: #666; margin-bottom: 20px; text-align: center">
+          問題数モードを選んでスタート！
+        </p>
+        <div class="btn-group">
+          <button class="menu-btn" onclick="selectMode(10)">10問モード</button>
+          <button class="menu-btn secondary" onclick="selectMode('all')">
+            全問モード
+          </button>
+        </div>
+      </div>
+
+      <!-- 結果画面 -->
+      <div id="result-screen" class="hidden">
+        <h1 style="font-size: 2.2rem; margin: 0">🎉 終了！</h1>
+        <div
+          id="final-score"
+          style="font-size: 1.4rem; font-weight: bold text-align: center;"
+        ></div>
+        <div id="final-time"
+            style="font-size: 1.1rem; color: #555; text-align: center;"
+        ></div>
+
+        <!-- 間違えた問題の一覧エリア -->
+        <div id="wrong-list-container" class="hidden">
+          <p class="wrong-title">❌ 要復習リスト</p>
+          <div id="wrong-list"></div>
+        </div>
+
+        <!-- ★【仕様変更】クリックしたら初期メニューに戻るように変更 -->
+        <button
+          class="menu-btn"
+          style="margin-top: 10px"
+          onclick="backToMenu()"
+        >
+          もう一度遊ぶ
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // 登場するすべての色のリスト
+      const colorPalette = [
+        "青",
+        "青白",
+        "深青",
+        "赤",
+        "黒",
+        "淡緑",
+        "黄褐",
+        "緑白",
+        "赤褐",
+        "血赤",
+        "白",
+        "黄",
+        "褐",
+      ];
+
+      // クイズデータ
+      const quizData = [
+        // === 銅 (Cu) グループ ===
+        { name: "銅(II)イオン", formula: "Cu²⁺", correct: "青" },
+        { name: "水酸化銅(II)", formula: "Cu(OH)₂", correct: "青白" },
+        {
+          name: "テトラアンミン銅(II)イオン",
+          formula: "[Cu(NH₃)₄]²⁺",
+          correct: "深青",
+        },
+        { name: "酸化銅(I)", formula: "Cu₂O", correct: "赤" },
+        { name: "酸化銅(II)", formula: "CuO", correct: "黒" },
+        { name: "硫化銅(II)（沈殿）", formula: "CuS", correct: "黒" },
+        // === 鉄 (Fe) グループ ===
+        { name: "鉄(II)イオン", formula: "Fe²⁺", correct: "淡緑" },
+        { name: "鉄(III)イオン", formula: "Fe³⁺", correct: "黄褐" },
+        { name: "水酸化鉄(II)", formula: "Fe(OH)₂", correct: "緑白" },
+        { name: "水酸化鉄(III)", formula: "Fe(OH)₃", correct: "赤褐" },
+        {
+          name: "チオシアン酸鉄(III)イオン",
+          formula: "[Fe(SCN)]²⁺",
+          correct: "血赤",
+        },
+        { name: "硫化鉄(II)（沈殿）", formula: "FeS", correct: "黒" },
+        // === 銀 (Ag) グループ ===
+        { name: "塩化銀", formula: "AgCl", correct: "白" },
+        { name: "酸化銀(I)（沈殿）", formula: "Ag₂O", correct: "褐" },
+        { name: "硫化銀（沈殿）", formula: "Ag₂S", correct: "黒" },
+        // === 鉛 (Pb) グループ ===
+        { name: "塩化鉛(II)（冷水沈殿）", formula: "PbCl₂", correct: "白" },
+        { name: "水酸化鉛(II)（沈殿）", formula: "Pb(OH)₂", correct: "白" },
+        { name: "硫酸鉛(II)（沈殿）", formula: "PbSO₄", correct: "白" },
+        { name: "硫化鉛(II)（沈殿）", formula: "PbS", correct: "黒" },
+        // === 亜鉛 (Zn) グループ ===
+        { name: "水酸化亜鉛（沈殿）", formula: "Zn(OH)₂", correct: "白" },
+        { name: "硫化亜鉛", formula: "ZnS", correct: "白" },
+        // === アルミニウム (Al) グループ ===
+        {
+          name: "水酸化アルミニウム（沈殿）",
+          formula: "Al(OH)₃",
+          correct: "白",
+        },
+        // === その他 グループ ===
+        { name: "クロム酸バリウム", formula: "BaCrO₄", correct: "黄" },
+      ];
+      let currentQuestions = [];
+      let currentIndex = 0;
+      let score = 0;
+      let startTime = 0;
+      let currentChoices = [];
+      let wrongAnswers = [];
+      // ドラッグ管理用変数
+      const card = document.getElementById("card");
+      const bgCard = document.getElementById("bg-card");
+      let isDragging = false;
+      let startX = 0;
+      let currentX = 0;
+      const swipeThreshold = 80;
+      // ★【新規追加】モード選択関数
+      function selectMode(mode) {
+        const startScreen = document.getElementById("start-screen");
+        if (startScreen) startScreen.classList.add("hidden");
+        let limit = mode === "all" ? quizData.length : mode;
+        startGame(limit);
+      }
+      // ★【新規追加】メニュー画面へ戻る関数
+      function backToMenu() {
+        document.getElementById("result-screen").classList.add("hidden");
+        document.getElementById("start-screen").classList.remove("hidden");
+      }
+      // ゲーム初期化（出題数を引数で受け取るように変更）
+      function startGame(questionCount) {
+        const resultScreen = document.getElementById("result-screen");
+        if (resultScreen) resultScreen.classList.add("hidden");
+        currentQuestions = [...quizData]
+          .sort(() => Math.random() - 0.5)
+          .slice(0, questionCount);
+        currentIndex = 0;
+        score = 0;
+        wrongAnswers = [];
+        startTime = Date.now();
+        updateScoreView();
+        showQuestion();
+      }
+      // 問題の表示
+      function showQuestion() {
+        if (currentIndex >= currentQuestions.length) {
+          endGame();
+          return;
+        }
+        resetCardPosition(false);
+        const q = currentQuestions[currentIndex];
+        document.getElementById("progress").innerText =
+          `問数: ${currentIndex + 1}/${currentQuestions.length}`;
+        document.getElementById("substance-name").innerText = q.name;
+        document.getElementById("substance-formula").innerText = q.formula;
+        if (currentIndex + 1 < currentQuestions.length) {
+          const nextQ = currentQuestions[currentIndex + 1];
+          document.getElementById("bg-substance-name").innerText = nextQ.name;
+          document.getElementById("bg-substance-formula").innerText =
+            nextQ.formula;
+          if (bgCard) {
+            bgCard.style.display = "flex";
+            bgCard.style.transition = "none";
+            bgCard.style.transform = "scale(0.94) translateY(15px)";
+            bgCard.style.opacity = "0.6";
+          }
+        } else {
+          if (bgCard) bgCard.style.display = "none";
+        }
+        const filteredColors = colorPalette.filter(
+          (color) => color !== q.correct,
+        );
+        const dummyColor =
+          filteredColors[Math.floor(Math.random() * filteredColors.length)];
+        currentChoices = [q.correct, dummyColor].sort(
+          () => Math.random() - 0.5,
+        );
+        document.getElementById("zone-left").innerText =
+          currentChoices[0] + "色";
+        document.getElementById("zone-right").innerText =
+          currentChoices[1] + "色";
+      }
+      // ドラッグイベント登録
+      card.addEventListener("mousedown", dragStart);
+      card.addEventListener("touchstart", dragStart, { passive: false });
+      window.addEventListener("mousemove", dragMove);
+      window.addEventListener("touchmove", dragMove, { passive: false });
+      window.addEventListener("mouseup", dragEnd);
+      window.addEventListener("touchend", dragEnd);
+      function dragStart(e) {
+        isDragging = true;
+        startX = e.touches ? e.touches[0].clientX : e.clientX;
+        currentX = 0;
+        card.style.transition = "none";
+      }
+      function dragMove(e) {
+        if (!isDragging) return;
+        if (e.cancelable) e.preventDefault();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        currentX = clientX - startX;
+        const rotate = currentX * 0.05;
+        card.style.transform = `translateX(${currentX}px) rotate(${rotate}deg)`;
+      }
+      function dragEnd() {
+        if (!isDragging) return;
+        isDragging = false;
+        if (currentX < -swipeThreshold) {
+          selectAnswer(0);
+        } else if (currentX > swipeThreshold) {
+          selectAnswer(1);
+        } else {
+          resetCardPosition(true);
+        }
+      }
+      function resetCardPosition(animate = true) {
+        card.style.transition = animate
+          ? "transform 0.3s ease, opacity 0.3s ease"
+          : "none";
+        card.style.transform = "translateX(0px) rotate(0deg)";
+        card.style.opacity = "1";
+        currentX = 0;
+      }
+      // 回答の処理
+      function selectAnswer(selectedIndex) {
+        const q = currentQuestions[currentIndex];
+        const isCorrect = currentChoices[selectedIndex] === q.correct;
+        card.style.transition = "transform 0.2s ease, opacity 0.2s ease";
+        const flyX = selectedIndex === 0 ? -500 : 500;
+        card.style.transform = `translateX(${flyX}px) rotate(${flyX * 0.05}deg)`;
+        card.style.opacity = "0";
+        if (currentIndex + 1 < currentQuestions.length && bgCard) {
+          bgCard.style.transition = "transform 0.2s ease, opacity 0.2s ease";
+          bgCard.style.transform = "scale(1) translateY(0px)";
+          bgCard.style.opacity = "1";
+        }
+        setTimeout(() => {
+          if (isCorrect) {
+            score++;
+            flashScreen("flash-correct");
+          } else {
+            wrongAnswers.push(q);
+            flashScreen("flash-wrong");
+          }
+          updateScoreView();
+          currentIndex++;
+          showQuestion();
+        }, 200);
+      }
+      function updateScoreView() {
+        const scoreView = document.getElementById("score-view");
+        if (scoreView) scoreView.innerText = `スコア: ${score}`;
+      }
+      function flashScreen(className) {
+        document.body.classList.add(className);
+        setTimeout(() => {
+          document.body.classList.remove(className);
+        }, 200);
+      }
+      // ゲーム終了
+      function endGame() {
+        const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        document.getElementById("result-screen").classList.remove("hidden");
+        document.getElementById("final-score").innerText =
+          `スコア: ${score} / ${currentQuestions.length}`;
+        document.getElementById("final-time").innerText =
+          `クリアタイム: ${totalTime} 秒`;
+        const container = document.getElementById("wrong-list-container");
+        const listEl = document.getElementById("wrong-list");
+        listEl.innerHTML = "";
+        if (wrongAnswers.length > 0) {
+          container.classList.remove("hidden");
+          wrongAnswers.forEach((q) => {
+            const item = document.createElement("div");
+            item.className = "wrong-item";
+            item.innerHTML = `<div class="wrong-info"> <span>${q.name}</span> <span class="wrong-formula">${q.formula}</span> </div> <span class="wrong-color">${q.correct}色</span>`;
+            listEl.appendChild(item);
+          });
+        } else {
+          container.classList.add("hidden");
+        }
+      }
+    </script>
+  </body>
+</html>
